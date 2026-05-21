@@ -1,0 +1,508 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Axis Cloud - Configuration & Authentification</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon"><i class="fa-solid fa-arrows-split-up-and-left"></i></div>
+      Axis Cloud
+    </div>
+    <nav>
+      <a href="index.html" class="active"><i class="fa-solid fa-sliders"></i> Configuration</a>
+      <a href="docs.html"><i class="fa-solid fa-book"></i> Documentation</a>
+    </nav>
+  </header>
+
+  <!-- Main Content -->
+  <main>
+    <div class="toast-container" id="toastContainer"></div>
+
+    <!-- Auth Card (shown if not logged in) -->
+    <div id="authSection" class="card" style="max-width: 480px; margin: 40px auto 0 auto;">
+      <h2 id="authTitle"><i class="fa-solid fa-shield-halved"></i> Connexion à Axis</h2>
+      <p class="subtitle">Accédez à votre relais d'inférence sécurisé</p>
+      
+      <form id="authForm" onsubmit="handleAuth(event)">
+        <div class="form-group">
+          <label for="email">Adresse Email</label>
+          <input type="email" id="email" required placeholder="nom@exemple.com">
+        </div>
+        <div class="form-group">
+          <label for="password">Mot de passe</label>
+          <input type="password" id="password" required placeholder="••••••••">
+        </div>
+        
+        <button type="submit" class="btn" id="authBtn">
+          Se Connecter <i class="fa-solid fa-arrow-right-to-bracket"></i>
+        </button>
+      </form>
+      
+      <div style="margin-top: 20px; text-align: center; font-size: 14px;">
+        <span id="authToggleText" style="color: var(--text-secondary);">Pas encore de compte ?</span>
+        <a href="#" onclick="toggleAuthMode()" id="authToggleLink" style="color: var(--accent-primary); text-decoration: none; font-weight: 600; margin-left: 6px;">Créer un compte</a>
+      </div>
+    </div>
+
+    <!-- Dashboard Section (shown if logged in) -->
+    <div id="dashboardSection" class="grid-2" style="display: none;">
+      
+      <!-- Left Column: Settings and Kaggle Token -->
+      <div class="card">
+        <h2><i class="fa-solid fa-gear"></i> Paramètres du Relais</h2>
+        <p class="subtitle">Configurez vos accès et vos clés sécurisées</p>
+        
+        <!-- Account Status -->
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--glass-border);">
+          <div>
+            <div style="font-weight: 600;" id="userEmailDisplay">utilisateur@exemple.com</div>
+            <div style="font-size: 12px; color: var(--text-secondary);">Compte relié à Supabase Auth</div>
+          </div>
+          <div id="proBadgeContainer">
+            <span class="badge-free">Gratuit</span>
+          </div>
+        </div>
+
+        <!-- Kaggle JSON Drag & Drop -->
+        <div class="form-group">
+          <label>Fichier de Configuration Kaggle</label>
+          <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+            Glissez-déposez votre fichier <strong>kaggle.json</strong> pour enregistrer vos clés d'API (stockées de façon cryptée avec pgsodium).
+          </p>
+          
+          <div class="dropzone" id="dropzone" ondragover="onDragOver(event)" ondragleave="onDragLeave(event)" ondrop="onDrop(event)" onclick="triggerFileInput()">
+            <div class="dropzone-icon"><i class="fa-solid fa-file-import"></i></div>
+            <div class="dropzone-text">
+              <span>Glissez-déposez kaggle.json</span> ou cliquez pour parcourir
+            </div>
+            <input type="file" id="fileInput" style="display: none;" accept=".json" onchange="handleFileSelect(event)">
+          </div>
+
+          <div id="kaggleStatus" style="margin-top: 12px; font-size: 13px; display: none; align-items: center; gap: 8px;">
+            <i class="fa-solid fa-circle-check" style="color: var(--success);"></i>
+            <span>Clé Kaggle chargée pour l'utilisateur : <strong id="kaggleUserDisplay">...</strong></span>
+          </div>
+        </div>
+
+        <!-- Pro Toggle button -->
+        <div style="margin-top: 32px;">
+          <button onclick="toggleProMode()" class="btn btn-secondary" style="gap: 8px;">
+            <i class="fa-solid fa-crown" style="color: #f59e0b;"></i> Activer / Désactiver Mode PRO
+          </button>
+        </div>
+
+        <div style="margin-top: 20px;">
+          <button onclick="logout()" class="btn btn-secondary" style="border-color: rgba(239, 68, 68, 0.3); color: var(--danger);">
+            Déconnexion <i class="fa-solid fa-arrow-right-from-bracket"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Right Column: API Keys Generation and Gateway Details -->
+      <div class="card">
+        <h2><i class="fa-solid fa-key"></i> Jetons & Clés d'Accès</h2>
+        <p class="subtitle">Clés indispensables pour interfacer VS Code ou Cursor</p>
+
+        <!-- Gateway URL display -->
+        <div class="form-group">
+          <label>URL de la Passerelle API (Base URL)</label>
+          <div class="input-wrapper" style="display: flex; gap: 8px;">
+            <input type="text" id="gatewayUrlInput" readonly value="http://localhost:3000/v1">
+            <button onclick="copyToClipboard('gatewayUrlInput')" class="btn" style="width: auto; padding: 0 16px; box-shadow: none;">
+              <i class="fa-regular fa-copy"></i>
+            </button>
+          </div>
+          <span style="font-size: 12px; color: var(--text-secondary); display: block; margin-top: 6px;">
+            Injectez cette URL comme base API dans votre extension d'éditeur de code.
+          </span>
+        </div>
+
+        <!-- Axis API Key generator -->
+        <div class="form-group" style="margin-top: 24px;">
+          <label>Clé d'API unique Axis (Bearer Token)</label>
+          <div class="input-wrapper" style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <input type="text" id="axisApiKeyInput" readonly placeholder="Générez votre clé API...">
+            <button onclick="copyToClipboard('axisApiKeyInput')" class="btn" style="width: auto; padding: 0 16px; box-shadow: none;">
+              <i class="fa-regular fa-copy"></i>
+            </button>
+          </div>
+          <button onclick="generateAxisKey()" class="btn" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);">
+            Générer une nouvelle clé Axis <i class="fa-solid fa-arrows-rotate"></i>
+          </button>
+          <span style="font-size: 12px; color: var(--danger); display: block; margin-top: 8px;">
+            ⚠️ Conservez précieusement cette clé, elle ne sera plus réaffichée après.
+          </span>
+        </div>
+
+        <!-- Testing the gateway interactive panel -->
+        <div class="interactive-demo" style="margin-top: 32px;">
+          <h3 style="font-size: 15px; font-weight: 700; margin-bottom: 12px;"><i class="fa-solid fa-bolt"></i> Tester la passerelle localement</h3>
+          <div class="form-group">
+            <label>Prompt de Test</label>
+            <input type="text" id="testPrompt" value="Écris une fonction de tri en Python.">
+          </div>
+          <button onclick="sendTestRequest()" class="btn" id="btnTestRequest">
+            Envoyer la requête (Inférence asynchrone)
+          </button>
+          
+          <div id="testOutputContainer" style="display: none; margin-top: 16px;">
+            <div class="output-label">
+              <label>Console de débogage (Polling actif...)</label>
+              <span id="pollStatusText" style="font-size: 12px; color: var(--warning);">
+                <i class="fa-solid fa-spinner fa-spin"></i> Polling en cours...
+              </span>
+            </div>
+            <div class="output-box" id="testOutputBox">Aucune requête envoyée</div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Client-side JavaScript -->
+  <script>
+    let isSignUpMode = false;
+    let currentUser = null;
+    let currentProfile = null;
+    const API_URL = "http://localhost:3000";
+
+    // Vérifier si une session existe au démarrage
+    window.onload = function() {
+      // Détecter l'URL actuelle
+      document.getElementById("gatewayUrlInput").value = window.location.origin + "/v1";
+      
+      const savedUser = localStorage.getItem("user");
+      const savedProfile = localStorage.getItem("profile");
+      if (savedUser && savedProfile) {
+        currentUser = JSON.parse(savedUser);
+        currentProfile = JSON.parse(savedProfile);
+        showDashboard();
+      }
+    };
+
+    function showToast(message, type = "success") {
+      const container = document.getElementById("toastContainer");
+      const toast = document.createElement("div");
+      toast.className = `toast ${type}`;
+      toast.innerHTML = `
+        <i class="fa-solid ${type === 'success' ? 'fa-circle-check' : 'fa-triangle-exclamation'}"></i>
+        <span>${message}</span>
+      `;
+      container.appendChild(toast);
+      
+      setTimeout(() => {
+        toast.style.animation = "slideIn 0.3s reverse forwards";
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    function toggleAuthMode() {
+      isSignUpMode = !isSignUpMode;
+      const title = document.getElementById("authTitle");
+      const text = document.getElementById("authToggleText");
+      const link = document.getElementById("authToggleLink");
+      const btn = document.getElementById("authBtn");
+
+      if (isSignUpMode) {
+        title.innerHTML = '<i class="fa-solid fa-user-plus"></i> Inscription Axis';
+        text.innerText = 'Déjà un compte ?';
+        link.innerText = 'Se connecter';
+        btn.innerHTML = 'Créer mon compte <i class="fa-solid fa-user-plus"></i>';
+      } else {
+        title.innerHTML = '<i class="fa-solid fa-shield-halved"></i> Connexion à Axis';
+        text.innerText = 'Pas encore de compte ?';
+        link.innerText = 'Créer un compte';
+        btn.innerHTML = 'Se Connecter <i class="fa-solid fa-arrow-right-to-bracket"></i>';
+      }
+    }
+
+    async function handleAuth(event) {
+      event.preventDefault();
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+
+      const endpoint = isSignUpMode ? "/api/auth/signup" : "/api/auth/signin";
+      
+      try {
+        const res = await fetch(API_URL + endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error || "Erreur d'authentification");
+        }
+
+        currentUser = data.user;
+        // Si c'est signup, on récupère le profil créé
+        currentProfile = data.profile || {
+          id: data.user.id,
+          email: data.user.email,
+          axis_api_key: data.axis_api_key,
+          kaggle_api_token: null,
+          is_pro: false
+        };
+
+        localStorage.setItem("user", JSON.stringify(currentUser));
+        localStorage.setItem("profile", JSON.stringify(currentProfile));
+
+        showToast(isSignUpMode ? "Compte créé avec succès !" : "Connexion réussie !");
+        showDashboard();
+      } catch (err) {
+        showToast(err.message, "error");
+      }
+    }
+
+    function showDashboard() {
+      document.getElementById("authSection").style.display = "none";
+      document.getElementById("dashboardSection").style.display = "grid";
+      
+      document.getElementById("userEmailDisplay").innerText = currentUser.email;
+      document.getElementById("axisApiKeyInput").value = currentProfile.axis_api_key;
+      
+      updateProBadge();
+      updateKaggleStatus();
+    }
+
+    function updateProBadge() {
+      const container = document.getElementById("proBadgeContainer");
+      if (currentProfile.is_pro) {
+        container.innerHTML = '<span class="badge-pro"><i class="fa-solid fa-crown"></i> Mode PRO</span>';
+      } else {
+        container.innerHTML = '<span class="badge-free">Gratuit</span>';
+      }
+    }
+
+    function updateKaggleStatus() {
+      const statusDiv = document.getElementById("kaggleStatus");
+      const userDisplay = document.getElementById("kaggleUserDisplay");
+
+      if (currentProfile.kaggle_api_token) {
+        try {
+          const creds = JSON.parse(currentProfile.kaggle_api_token);
+          if (creds && creds.username) {
+            statusDiv.style.display = "flex";
+            userDisplay.innerText = creds.username;
+            return;
+          }
+        } catch(e) {}
+      }
+      statusDiv.style.display = "none";
+    }
+
+    // Drag and Drop & File Upload handlers
+    function onDragOver(e) {
+      e.preventDefault();
+      document.getElementById("dropzone").classList.add("dragover");
+    }
+
+    function onDragLeave(e) {
+      e.preventDefault();
+      document.getElementById("dropzone").classList.remove("dragover");
+    }
+
+    function onDrop(e) {
+      e.preventDefault();
+      document.getElementById("dropzone").classList.remove("dragover");
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        processKaggleJson(files[0]);
+      }
+    }
+
+    function triggerFileInput() {
+      document.getElementById("fileInput").click();
+    }
+
+    function handleFileSelect(e) {
+      const files = e.target.files;
+      if (files.length > 0) {
+        processKaggleJson(files[0]);
+      }
+    }
+
+    function processKaggleJson(file) {
+      if (file.name !== "kaggle.json") {
+        showToast("Veuillez déposer uniquement le fichier kaggle.json d'API officielle.", "error");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = async function(event) {
+        try {
+          const credentials = JSON.parse(event.target.result);
+          if (!credentials.username || !credentials.key) {
+            throw new Error("Le fichier kaggle.json doit contenir 'username' et 'key'");
+          }
+
+          // Envoyer au serveur
+          const res = await fetch(API_URL + "/api/profile/update-kaggle", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "x-user-id": currentUser.id
+            },
+            body: JSON.stringify({ kaggle_api_token: credentials })
+          });
+
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error);
+
+          currentProfile = data.profile;
+          localStorage.setItem("profile", JSON.stringify(currentProfile));
+          
+          showToast("Clés API Kaggle enregistrées de façon cryptée !");
+          updateKaggleStatus();
+        } catch (err) {
+          showToast("Fichier JSON invalide : " + err.message, "error");
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    // Generer clé Axis
+    async function generateAxisKey() {
+      try {
+        const res = await fetch(API_URL + "/api/profile/generate-key", {
+          method: "POST",
+          headers: { "x-user-id": currentUser.id }
+        });
+        const data = await res.json();
+        
+        currentProfile.axis_api_key = data.axis_api_key;
+        localStorage.setItem("profile", JSON.stringify(currentProfile));
+        
+        document.getElementById("axisApiKeyInput").value = data.axis_api_key;
+        showToast("Clé Axis régénérée avec succès !");
+      } catch (err) {
+        showToast("Erreur de régénération de la clé", "error");
+      }
+    }
+
+    // Pro Mode Toggle
+    async function toggleProMode() {
+      try {
+        const res = await fetch(API_URL + "/api/profile/toggle-pro", {
+          method: "POST",
+          headers: { "x-user-id": currentUser.id }
+        });
+        const data = await res.json();
+
+        currentProfile.is_pro = data.is_pro;
+        localStorage.setItem("profile", JSON.stringify(currentProfile));
+
+        showToast(data.is_pro ? "Mode Professionnel activé !" : "Mode Gratuit activé");
+        updateProBadge();
+      } catch (err) {
+        showToast("Erreur lors de la modification du statut du compte", "error");
+      }
+    }
+
+    // Copy to clipboard
+    function copyToClipboard(id) {
+      const copyText = document.getElementById(id);
+      copyText.select();
+      copyText.setSelectionRange(0, 99999);
+      navigator.clipboard.writeText(copyText.value);
+      showToast("Copié dans le presse-papiers !");
+    }
+
+    function logout() {
+      localStorage.clear();
+      currentUser = null;
+      currentProfile = null;
+      document.getElementById("dashboardSection").style.display = "none";
+      document.getElementById("authSection").style.display = "block";
+      showToast("Déconnexion effectuée.");
+    }
+
+    // Simulation de client Polling
+    async function sendTestRequest() {
+      const prompt = document.getElementById("testPrompt").value;
+      const apiKey = currentProfile.axis_api_key;
+      const outputBox = document.getElementById("testOutputBox");
+      const container = document.getElementById("testOutputContainer");
+      const statusText = document.getElementById("pollStatusText");
+      
+      container.style.display = "block";
+      outputBox.innerText = `>>> POST /v1/chat/completions ...\n`;
+      statusText.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Initialisation...';
+
+      try {
+        // 1. Initialiser le job
+        const initRes = await fetch(API_URL + "/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: "axis-pro",
+            messages: [{ role: "user", content: prompt }]
+          })
+        });
+
+        const initData = await initRes.json();
+        if (!initRes.ok) throw new Error(initData.error);
+
+        outputBox.innerText += `<<< HTTP 202 Accepted\n`;
+        outputBox.innerText += JSON.stringify(initData, null, 2) + "\n\n";
+
+        const jobId = initData.job_id;
+        const checkUrl = initData.check_status_url;
+
+        // 2. Lancer la boucle de polling
+        let completed = false;
+        let pollCount = 0;
+        
+        statusText.innerHTML = '<i class="fa-solid fa-arrows-spin fa-spin"></i> Polling en cours...';
+
+        const pollInterval = setInterval(async () => {
+          pollCount++;
+          outputBox.innerText += `>>> GET /v1/jobs/status?id=${jobId} (Tentative n°${pollCount})\n`;
+
+          try {
+            const statusRes = await fetch(`${API_URL}/v1/jobs/status?id=${jobId}`, {
+              headers: { "Authorization": `Bearer ${apiKey}` }
+            });
+
+            const statusData = await statusRes.json();
+            outputBox.innerText += `<<< HTTP 200 OK\n`;
+            outputBox.innerText += JSON.stringify(statusData, null, 2) + "\n\n";
+            outputBox.scrollTop = outputBox.scrollHeight;
+
+            if (statusData.status === "completed") {
+              clearInterval(pollInterval);
+              statusText.innerHTML = '<i class="fa-solid fa-circle-check" style="color: var(--success);"></i> Succès';
+              showToast("Inférence terminée avec succès !");
+            } else if (statusData.status === "failed") {
+              clearInterval(pollInterval);
+              statusText.innerHTML = '<i class="fa-solid fa-circle-xmark" style="color: var(--danger);"></i> Échec';
+              showToast("L'inférence a échoué", "error");
+            }
+          } catch (e) {
+            clearInterval(pollInterval);
+            statusText.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="color: var(--danger);"></i> Erreur';
+            outputBox.innerText += `!!! Erreur lors du polling : ${e.message}\n`;
+          }
+        }, 3000); // Polling toutes les 3 secondes
+
+      } catch (err) {
+        statusText.innerHTML = '<i class="fa-solid fa-circle-xmark" style="color: var(--danger);"></i> Échec';
+        outputBox.innerText += `!!! Erreur : ${err.message}\n`;
+      }
+    }
+  </script>
+</body>
+</html>

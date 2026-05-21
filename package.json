@@ -1,0 +1,16 @@
+{
+  "name": "axis-cloud",
+  "version": "1.0.0",
+  "description": "Relais d'inférence intelligent pour Kaggle",
+  "main": "simulator/server.js",
+  "scripts": {
+    "start": "node simulator/server.js",
+    "test": "node tests/robustness.test.js"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  },
+  "type": "module"
+}

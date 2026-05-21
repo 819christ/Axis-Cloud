@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Axis Cloud - Documentation de l'API & Polling</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <header>
+    <div class="logo">
+      <div class="logo-icon"><i class="fa-solid fa-arrows-split-up-and-left"></i></div>
+      Axis Cloud
+    </div>
+    <nav>
+      <a href="index.html"><i class="fa-solid fa-sliders"></i> Configuration</a>
+      <a href="docs.html" class="active"><i class="fa-solid fa-book"></i> Documentation</a>
+    </nav>
+  </header>
+
+  <!-- Main Content -->
+  <main style="max-width: 900px;">
+    <div class="card" style="padding: 40px;">
+      <h2 style="font-size: 28px; margin-bottom: 8px;"><i class="fa-solid fa-graduation-cap"></i> Documentation API</h2>
+      <p class="subtitle" style="font-size: 16px;">Protocole d'intégration asynchrone pour la passerelle d'inférence Axis</p>
+      
+      <hr style="border: 0; border-top: 1px solid var(--glass-border); margin: 24px 0;">
+
+      <!-- Section 1: Introduction -->
+      <div class="doc-section">
+        <h3>1. Fonctionnement Général</h3>
+        <p>
+          Axis agit comme un <strong>relais asynchrone</strong> vers l'API Kaggle afin d'exécuter des modèles lourds sans bloquer les connexions HTTP des applications clientes. Cela permet de s'affranchir des limitations de durée de vie des architectures serverless (comme les Edge Functions de Supabase limitées à quelques dizaines de secondes).
+        </p>
+        <p>
+          Toute intégration doit suivre le protocole en deux étapes : 
+          <ol style="margin-left: 20px; margin-top: 8px; color: var(--text-secondary); display: flex; flex-direction: column; gap: 8px; font-size: 14px;">
+            <li><strong>Initialisation :</strong> Envoi de la requête de prompt (format compatible OpenAI) pour créer une tâche en file d'attente.</li>
+            <li><strong>Polling (Boucle de vérification) :</strong> Interrogation récurrente (toutes les 3 à 5 secondes) de l'API jusqu'à obtention du statut final (complétion ou échec).</li>
+          </ol>
+        </p>
+      </div>
+
+      <!-- Section 2: POST Chat completions -->
+      <div class="doc-section">
+        <h3>2. Initialisation d'une tâche</h3>
+        <p>Pour soumettre un prompt d'inférence au modèle.</p>
+        
+        <div class="code-block">
+          <span class="badge-method post">POST</span> <code>/v1/chat/completions</code>
+        </div>
+
+        <p><strong>En-têtes requis :</strong></p>
+        <div class="code-block">
+          <pre>Authorization: Bearer YOUR_AXIS_API_KEY
+Content-Type: application/json</pre>
+        </div>
+
+        <p><strong>Corps de la requête (Body JSON) :</strong></p>
+        <div class="code-block">
+          <pre>{
+  "model": "axis-pro",
+  "messages": [
+    {
+      "role": "user",
+      "content": "Écris une fonction de tri en Python."
+    }
+  ]
+}</pre>
+        </div>
+
+        <p><strong>Réponse (HTTP 202 Accepted) :</strong></p>
+        <div class="code-block">
+          <pre>{
+  "status": "queued",
+  "job_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "check_status_url": "http://localhost:3000/v1/jobs/status?id=9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
+}</pre>
+        </div>
+      </div>
+
+      <!-- Section 3: GET status -->
+      <div class="doc-section">
+        <h3>3. Récupération du statut (Polling)</h3>
+        <p>Appelé récursivement par l'application cliente.</p>
+        
+        <div class="code-block">
+          <span class="badge-method get">GET</span> <code>/v1/jobs/status?id=YOUR_JOB_ID</code>
+        </div>
+
+        <p><strong>Réponse (Si le traitement est en cours - HTTP 200 OK) :</strong></p>
+        <div class="code-block">
+          <pre>{
+  "job_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "status": "processing"
+}</pre>
+        </div>
+
+        <p><strong>Réponse (Si terminé avec succès - HTTP 200 OK) :</strong></p>
+        <div class="code-block">
+          <pre>{
+  "job_id": "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d",
+  "status": "completed",
+  "choices": [
+    {
+      "message": {
+        "role": "assistant",
+        "content": "Voici votre fonction de tri en Python..."
+      }
+    }
+  ]
+}</pre>
+        </div>
+      </div>
+
+      <!-- Section 4: Code Examples -->
+      <div class="doc-section">
+        <h3>4. Exemple d'implémentation en Python</h3>
+        <p>Voici un script Python simple intégrant la boucle de polling.</p>
+        <div class="code-block">
+          <pre>import requests
+import time
+
+AXIS_API_KEY = "votre_cle_axis"
+BASE_URL = "http://localhost:3000"
+
+headers = {
+    "Authorization": f"Bearer {AXIS_API_KEY}",
+    "Content-Type": "application/json"
+}
+
+# 1. Envoi du prompt
+payload = {
+    "model": "axis-pro",
+    "messages": [{"role": "user", "content": "Hello World!"}]
+}
+
+response = requests.post(f"{BASE_URL}/v1/chat/completions", json=payload, headers=headers)
+data = response.json()
+job_id = data["job_id"]
+print(f"Tâche initialisée : {job_id}")
+
+# 2. Boucle de Polling
+while True:
+    time.sleep(3)
+    status_response = requests.get(f"{BASE_URL}/v1/jobs/status?id={job_id}", headers=headers)
+    status_data = status_response.json()
+    
+    status = status_data["status"]
+    print(f"Statut : {status}")
+    
+    if status == "completed":
+        content = status_data["choices"][0]["message"]["content"]
+        print(f"\nRéponse du modèle :\n{content}")
+        break
+    elif status == "failed":
+        print(f"Erreur : {status_data['error']}")
+        break</pre>
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+</body>
+</html>
